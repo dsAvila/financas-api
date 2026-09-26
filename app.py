@@ -1,3 +1,4 @@
+from datetime import date
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
@@ -24,6 +25,7 @@ class Transacao(db.Model):
     tipo = db.Column(db.String(20), nullable=False)
     moeda = db.Column(db.String(10), default='BRL')
     categoria = db.Column(db.String(50), nullable=False)
+    data = db.Column(db.String(10), nullable=False, default=lambda: date.today().isoformat())
 
     def to_dict(self):
         return {
@@ -32,7 +34,8 @@ class Transacao(db.Model):
             'valor': self.valor,
             'tipo': self.tipo,
             'moeda': self.moeda,
-            'categoria': self.categoria
+            'categoria': self.categoria,
+            'data': self.data
         }
 
 with app.app_context():
@@ -58,8 +61,8 @@ def listar_transacoes():
     transacoes = Transacao.query.all()
     cotacao_usd = cotacao_dolar()
 
-    total_receitas = 0.0
-    total_despesas = 0.0
+    total_receitas_brl = 0.0
+    total_despesas_brl = 0.0
     total_investimentos_brl = 0.0
     total_investimentos_usd = 0.0
 
@@ -67,10 +70,13 @@ def listar_transacoes():
     for item in transacoes:
         lista_transacoes.append(item.to_dict())
 
+        fator_conversao = cotacao_usd if item.moeda == 'USD' else 1.0
+        valor_em_brl = item.valor * fator_conversao
+
         if item.tipo == 'receita':
-            total_receitas += item.valor
+            total_receitas_brl += item.valor
         elif item.tipo == 'despesa':
-            total_despesas += item.valor
+            total_despesas_brl += item.valor
         elif item.tipo == 'investimento':
             if item.moeda == 'USD':
                 total_investimentos_usd += item.valor
@@ -78,7 +84,7 @@ def listar_transacoes():
                 total_investimentos_brl += item.valor
 
     investimentos_usd_convertido = total_investimentos_usd * cotacao_usd
-    saldo_caixa = total_receitas - total_despesas
+    saldo_caixa = total_receitas_brl - total_despesas_brl - total_investimentos_brl - investimentos_usd_convertido
     patrimonio_liquido_total = saldo_caixa + total_investimentos_brl + investimentos_usd_convertido
 
     return jsonify({
@@ -119,12 +125,15 @@ def criar_transacao():
     except ValueError:
         return jsonify({'erro': 'O campo valor deve ser numérico.'}), 400
 
+    data_transacao = str(dados.get('data') or date.today().isoformat())
+
     nova_transacao = Transacao(
         descricao = dados['descricao'],
         valor = valor,
         tipo = tipo,
         moeda = moeda,
-        categoria = dados['categoria']
+        categoria = dados['categoria'],
+        data = data_transacao
     )
 
     db.session.add(nova_transacao)
@@ -157,6 +166,9 @@ def atualizar_transacao(id):
 
     transacao.descricao = dados.get('descricao', transacao.descricao)
     transacao.categoria = dados.get('categoria', transacao.categoria)
+    
+    if 'data' in dados:
+        transacao.data = str(dados['data'])
 
     if 'valor' in dados:
         try:
