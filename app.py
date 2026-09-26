@@ -72,12 +72,13 @@ def listar_transacoes():
 
         fator_conversao = cotacao_usd if item.moeda == 'USD' else 1.0
         valor_em_brl = item.valor * fator_conversao
+        tipo_normalizado = str(item.tipo).lower()
 
-        if item.tipo == 'receita':
+        if tipo_normalizado == 'receita':
             total_receitas_brl += item.valor
-        elif item.tipo == 'despesa':
+        elif tipo_normalizado == 'despesa':
             total_despesas_brl += item.valor
-        elif item.tipo == 'investimento':
+        elif tipo_normalizado == 'investimento':
             if item.moeda == 'USD':
                 total_investimentos_usd += item.valor
             else:
